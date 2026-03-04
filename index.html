@@ -24,10 +24,12 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .sidebar-header .total{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);margin-top:6px}
 
 /* Vendor toggle */
-.vendor-toggle{display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border)}
+.vendor-toggle{padding:10px 12px;border-bottom:1px solid var(--border)}
+.vendor-label{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.vendor-btns{display:flex;gap:8px}
 .vtoggle{flex:1;padding:7px 0;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text-dim);font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .15s;font-family:'JetBrains Mono',monospace}
 .vtoggle:hover{color:var(--text)}
-.vtoggle.active-intel{border-color:var(--intel);background:var(--intel-dim);color:#60a5fa}
+.vtoggle.active-intel{border-color:var(--accent);background:var(--accent-dim);color:var(--accent)}
 .vtoggle.active-amd{border-color:var(--amd);background:var(--amd-dim);color:var(--amd)}
 
 /* Vendor indicator bar */
@@ -166,11 +168,14 @@ body.vendor-intel .platform-select select:focus{border-color:var(--intel)}
       <div class="total" id="totalBadge">29 platforms · 39,077 parameters</div>
     </div>
     <div class="vendor-toggle">
-      <button id="btnIntel" class="vtoggle" onclick="selectVendor('Intel')">Intel</button>
-      <button id="btnAMD"   class="vtoggle" onclick="selectVendor('AMD')">AMD</button>
+      <div class="vendor-label">Select Vendor</div>
+      <div class="vendor-btns">
+        <button id="btnIntel" class="vtoggle" onclick="selectVendor('Intel')">Intel</button>
+        <button id="btnAMD"   class="vtoggle" onclick="selectVendor('AMD')">AMD</button>
+      </div>
     </div>
     <div class="platform-select">
-      <select id="platformSelect" autocomplete="off"><option value="">Select platform...</option></select>
+      <select id="platformSelect" autocomplete="off"><option value="">Select Processor...</option></select>
     </div>
     <nav class="sidebar-nav" id="sidebarNav"></nav>
   </aside>
@@ -196,12 +201,12 @@ let selectedVendor   = null;   // 'Intel' | 'AMD' | null
 // ── Vendor theming ───────────────────────────────────────────────────────────
 
 function setVendorTheme(vendor) {
+  // Blue is the default — only AMD overrides to red
   document.body.classList.remove('vendor-intel','vendor-amd');
   const bar = document.getElementById('vendorBar');
   bar.classList.remove('intel','amd','none');
-  if (vendor === 'Intel')    { document.body.classList.add('vendor-intel'); bar.classList.add('intel'); }
-  else if (vendor === 'AMD') { document.body.classList.add('vendor-amd');   bar.classList.add('amd'); }
-  else                       { bar.classList.add('none'); }
+  if (vendor === 'AMD') { document.body.classList.add('vendor-amd'); bar.classList.add('amd'); }
+  else                  { bar.classList.add(vendor === 'Intel' ? 'intel' : 'none'); }
 }
 
 // ── Vendor toggle ─────────────────────────────────────────────────────────────
@@ -209,18 +214,14 @@ function setVendorTheme(vendor) {
 function selectVendor(v) {
   selectedVendor = (selectedVendor === v) ? null : v;
   setVendorTheme(selectedVendor);
-  const bi = document.getElementById('btnIntel');
-  const ba = document.getElementById('btnAMD');
-  bi.className = 'vtoggle' + (selectedVendor === 'Intel' ? ' active-intel' : '');
-  ba.className = 'vtoggle' + (selectedVendor === 'AMD'   ? ' active-amd'   : '');
-  // If current platform doesn't belong to new vendor filter, reset
+  document.getElementById('btnIntel').className = 'vtoggle' + (selectedVendor === 'Intel' ? ' active-intel' : '');
+  document.getElementById('btnAMD').className   = 'vtoggle' + (selectedVendor === 'AMD'   ? ' active-amd'   : '');
+  // Reset platform if it doesn't belong to the new vendor
   if (currentPlatform && selectedVendor && currentPlatform.vendor !== selectedVendor) {
     currentPlatform = null; platformData = null;
-    document.getElementById('sidebarNav').innerHTML = '';
-    document.getElementById('content').innerHTML = '';
   }
   rebuildPlatformSelect();
-  updateBadge();
+  showLanding();   // show filtered tiles for this vendor (or all if none selected)
 }
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
@@ -282,53 +283,52 @@ function showLanding() {
   document.getElementById('stats').innerHTML = '';
   updateBadge();
 
-  const intel = INDEX.filter(p => p.vendor === 'Intel');
-  const amd   = INDEX.filter(p => p.vendor === 'AMD');
-
-  // Group Intel by segment
-  const intelGroups = { Server:[], Client:[], Embedded:[] };
-  for (const p of intel) (intelGroups[p.segment] || intelGroups.Client).push(p);
-
-  // Group AMD by source_type
-  const amdGroups = {};
-  for (const p of amd) { const k = p.source_type || 'Other'; if (!amdGroups[k]) amdGroups[k] = []; amdGroups[k].push(p); }
+  const showIntel = !selectedVendor || selectedVendor === 'Intel';
+  const showAMD   = !selectedVendor || selectedVendor === 'AMD';
+  const intel     = INDEX.filter(p => p.vendor === 'Intel');
+  const amd       = INDEX.filter(p => p.vendor === 'AMD');
 
   let h = '<div class="landing">';
-  h += '<h2>Firmware Parameter Catalog</h2>';
-  h += '<div class="lead">Browsable reference for Intel FSP and AMD AGESA/openSIL firmware parameters. Parsed directly from published header files and source code.</div>';
+  h += '<div class="lead">Select a processor above to browse its firmware configuration parameters.</div>';
 
-  // Intel section
-  h += '<div class="vendor-section">';
-  h += '<div class="vendor-title"><span class="vtag vtag-intel">INTEL</span> Firmware Support Package (FSP)</div>';
-  h += '<div class="vendor-subtitle">' + intel.length + ' platforms · ' + intel.reduce((s,p)=>s+p.total_parameters,0).toLocaleString() + ' parameters</div>';
-  for (const [seg, platforms] of Object.entries(intelGroups)) {
-    if (!platforms.length) continue;
-    h += `<div style="font-size:13px;color:var(--text-dim);margin:12px 0 6px;font-weight:500">${seg}</div><div class="platform-grid">`;
-    for (const p of platforms.sort((a,b) => b.total_parameters - a.total_parameters)) {
-      h += `<div class="platform-tile intel-tile" onclick="loadPlatform('${p.pkg_name}',null,true)">
-        <div class="name">${esc(p.platform)}</div><div class="proc">${esc(p.processor)}</div>
-        <div class="meta"><span class="seg seg-${seg.replace(/[^a-zA-Z]/g,'')}">${seg}</span>
-        <span class="param-count">${p.total_parameters.toLocaleString()}</span></div></div>`;
+  if (showIntel) {
+    const intelGroups = { Server:[], Client:[], Embedded:[] };
+    for (const p of intel) (intelGroups[p.segment] || intelGroups.Client).push(p);
+    h += '<div class="vendor-section">';
+    if (!selectedVendor) h += '<div class="vendor-title"><span class="vtag vtag-intel">INTEL</span> Firmware Support Package (FSP)</div>';
+    for (const [seg, platforms] of Object.entries(intelGroups)) {
+      if (!platforms.length) continue;
+      h += `<div style="font-size:13px;color:var(--text-dim);margin:12px 0 6px;font-weight:500">${seg}</div><div class="platform-grid">`;
+      for (const p of platforms.sort((a,b) => b.total_parameters - a.total_parameters)) {
+        h += `<div class="platform-tile intel-tile" onclick="loadPlatform('${p.pkg_name}',null,true)">
+          <div class="name">${esc(p.platform)}</div><div class="proc">${esc(p.processor)}</div>
+          <div class="meta"><span class="seg seg-${seg.replace(/[^a-zA-Z]/g,'')}">${seg}</span>
+          <span class="param-count">${p.total_parameters.toLocaleString()}</span></div></div>`;
+      }
+      h += '</div>';
     }
     h += '</div>';
   }
+
+  if (showAMD) {
+    const amdGroups = {};
+    for (const p of amd) { const k = p.source_type||'Other'; if (!amdGroups[k]) amdGroups[k] = []; amdGroups[k].push(p); }
+    h += '<div class="vendor-section">';
+    if (!selectedVendor) h += '<div class="vendor-title"><span class="vtag vtag-amd">AMD</span> AGESA · AMD FSP · openSIL</div>';
+    for (const [src, platforms] of Object.entries(amdGroups)) {
+      h += `<div style="font-size:13px;color:var(--text-dim);margin:12px 0 6px;font-weight:500">${esc(src)}</div><div class="platform-grid">`;
+      for (const p of platforms.sort((a,b) => b.total_parameters - a.total_parameters)) {
+        h += `<div class="platform-tile amd-tile" onclick="loadPlatform('${p.pkg_name}',null,true)">
+          <div class="name">${esc(p.platform)}</div><div class="proc">${esc(p.processor)}</div>
+          <div class="meta"><span class="src-type">${esc(p.source_type||'')}</span>
+          <span class="param-count">${p.total_parameters.toLocaleString()}</span></div></div>`;
+      }
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+
   h += '</div>';
-
-  // AMD section
-  h += '<div class="vendor-section">';
-  h += '<div class="vendor-title"><span class="vtag vtag-amd">AMD</span> AGESA · AMD FSP · openSIL</div>';
-  h += '<div class="vendor-subtitle">' + amd.length + ' platforms · ' + amd.reduce((s,p)=>s+p.total_parameters,0).toLocaleString() + ' parameters</div>';
-  for (const [src, platforms] of Object.entries(amdGroups)) {
-    h += `<div style="font-size:13px;color:var(--text-dim);margin:12px 0 6px;font-weight:500">${esc(src)}</div><div class="platform-grid">`;
-    for (const p of platforms.sort((a,b) => b.total_parameters - a.total_parameters)) {
-      h += `<div class="platform-tile amd-tile" onclick="loadPlatform('${p.pkg_name}',null,true)">
-        <div class="name">${esc(p.platform)}</div><div class="proc">${esc(p.processor)}</div>
-        <div class="meta"><span class="src-type">${esc(p.source_type||'')}</span>
-        <span class="param-count">${p.total_parameters.toLocaleString()}</span></div></div>`;
-    }
-    h += '</div>';
-  }
-  h += '</div></div>';
 
   document.getElementById('content').innerHTML = h;
 }
