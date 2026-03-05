@@ -181,7 +181,7 @@ body.vendor-intel .platform-select select:focus{border-color:var(--intel)}
   </aside>
   <div class="main">
     <div class="topbar">
-      <button class="toggle-btn" id="toggleBtn" title="Toggle sidebar">☰</button>
+      <button class="toggle-btn" id="toggleBtn" title="Toggle sidebar">◀</button>
       <div class="search-box"><span class="search-icon">⌕</span><input type="text" id="searchInput" placeholder="Search parameters..."></div>
       <div class="topbar-stats" id="stats"></div>
     </div>
@@ -290,7 +290,9 @@ function showLanding() {
   const amd       = INDEX.filter(p => p.vendor === 'AMD');
 
   let h = '<div class="landing">';
-  h += '<div class="lead">Select a processor above to browse its firmware configuration parameters.</div>';
+  if (!selectedVendor && !currentPlatform) {
+    h += '<div class="lead">Select a processor on the left to browse its firmware configuration parameters.</div>';
+  }
 
   if (showIntel) {
     const intelGroups = { Server:[], Client:[], Embedded:[] };
@@ -557,8 +559,12 @@ function setupEvents() {
       renderContent();
     }, 150);
   });
-  document.getElementById('toggleBtn').addEventListener('click', () =>
-    document.getElementById('sidebar').classList.toggle('collapsed'));
+  document.getElementById('toggleBtn').addEventListener('click', () => {
+    const sidebar = document.getElementById('sidebar');
+    const btn = document.getElementById('toggleBtn');
+    sidebar.classList.toggle('collapsed');
+    btn.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+  });
   document.getElementById('platformSelect').addEventListener('change', e => {
     if (e.target.value) loadPlatform(e.target.value, null, true);
     else showLanding();
